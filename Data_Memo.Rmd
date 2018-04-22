@@ -1,0 +1,40 @@
+---
+title: "Data Memo"
+author: "Data Science III (STAT 301-3)"
+date: "Adrian Naranjo"
+output: html_document
+---
+
+
+## Data Sources
+
+*All files can be found on the Prosper website:* https://www.prosper.com/home/.
+<br>
+
+All files contain the same attributes, all of which describe all loans on made through the Prosper platform for a given year. The years are from 2013 through the present. Attributes within the files include:
+
+* Terms of the loan (e.g.term, the rate of interest, origination date, principal borrowed)
+* Past payment breakout (e.g. service fees paid, principal paid, interest paid, late fees paid)
+* Future payment dates and amounts
+* Current status descriptors
+* Rating of the borrower
+
+<br>
+
+#### Note: other more datasets may be added to the analysis (e.g. more years of data) if they can either add more attributes to the loan or allow me to connect loans to individual borrowers. This data could come Prosper or could be from other lending sites or institutions with credit ratings.
+
+<br>
+
+## Research Question
+
+This project will primarily attempt to answer the classification question: 'can we predict full payment, with no late payments, (or default and/or late payments) of a loan given its attributes?" Essentially, we want to know: "should we make this loan?" The expectation here is that the loan should be paid in full, with  absolutely no late payments. Hence, while there are several status for each loan, they will be grouped into a binary set: default or no default. Also, because some current outstanding loans could potential default or have late payments in the future, only loans which are no longer outstanding will be considered in the analysis. Primary variables such as rating, amount borrowed, term, and interest rate are expected to weigh more heavily on the model than others. 
+
+One the one hand, a linear model may simple enough to describe the outcome, however it also seems likely that many predictors may make better predictions after being separated out as their own model. For example, perhaps one predictor is more important for borrowers or a certain rating (lets say the highest rating), while another variable is important for a different rating (e.g. the lowest rating). Thus, it would not be surprising that splines and/or decision trees will be very useful in this analysis.
+
+## Potential Issues
+
+1. As always, the data has no guarantees of being accurate. 
+
+2. While cleaning may be an issue, we hope to acquire data that somehow provides more insight into the borrower, not just the loan. Thus, merging and cleaning may be a factor in the future, especially if future data is not from the prosper website.
+
+3. It is extremely possible that the true model which describes the default of a loan on the Prosper website is not described by the attributes which we have at hand. Thus, any model I create may be useless. We hope that's not the case, but it could happen.
