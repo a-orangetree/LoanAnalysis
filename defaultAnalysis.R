@@ -6,7 +6,6 @@ library(leaps)
 library(class)
 library(gbm)
 library(gridExtra)
-library(caret)
 
 # TODO:
 # 1. Figure out error for linear model
@@ -16,50 +15,53 @@ library(caret)
 # 5. PCA?
 
 ######################
-# Import data
+# Import LOAN data
 
 # df_2005 <- read_csv('data/Loans_20050101to20130101_20180415T060005.csv') # Has problems (753 rows)
 
 df_2013 <- read_csv('data/Loans_20130101to20140101_20180415T060158.csv') %>% 
-  mutate(year = '2013')
+  mutate(year = 2013)
 df_2014 <- read_csv('data/Loans_20140101to20150101_20180415T060226.csv') %>% 
-  mutate(year = '2014')
+  mutate(year = 2014)
 df_2015 <- read_csv('data/Loans_20150101to20160101_20180415T060359.csv') %>% 
-  mutate(year = '2015')
+  mutate(year = 2015)
 # df_2016 <- read_csv('data/Loans_20160101to20170101_20180415T060742.csv') %>%
-# mutate(year = '2016')
+# mutate(year = 2016)
 df_2017 <- read_csv('data/Loans_20170101to20180101_20180415T060911.csv') %>% 
-  mutate(year = '2017')
+  mutate(year = 2017)
 df_2018 <- read_csv('data/Loans_20180101toCurrent_20180415T061114.csv') %>% 
-  mutate(year = '2018'
+  mutate(year = 2018
          ,loan_default_reason = as.integer(loan_default_reason))
 
 df_all_years <- bind_rows(df_2013, df_2014, df_2015, df_2017, df_2018)
 df_all_year_raw <- df_all_years
 
-######################
-# Clean data
+unique(df_all_years$loan_status_description)
+
 
 # Remove loans which are currently outstanding or were cancelled
 df_all_years <- df_all_years %>% 
   filter(!loan_status_description %in% c('CURRENT', 'CANCELLED'))
 
-# Remove loans with no rating
-df_all_years <- df_all_years %>% 
-  filter(prosper_rating != 'N/A')
+unique(df_all_years$loan_status_description)
+
+
+######################
+# Clean LOAN data
+
 
 # Change datatypes of select columns to factor
 df_all_years <- df_all_years %>% 
   mutate(lost_money = factor(ifelse(loan_status_description == 'COMPLETED', 1, 0))
          ,prosper_rating = factor(prosper_rating)
-         # ,month_of_origination = factor(month(origination_date)) ????????????????????????
+         # ,month_of_origination = factor(month(origination_date)) error when modeling????????????????????????
          ,term = factor(term))
 
 # Remove redundant or non-useful columns
 df_all_years <- df_all_years %>%
-  select(-loan_default_reason, -loan_number, -days_past_due, -debt_sale_proceeds_received, -loan_status,
-         -loan_default_reason_description, -loan_status_description, -next_payment_due_date, -principal_paid,
-         -origination_date, -interest_paid, -borrower_rate)
+  select(-loan_default_reason, -days_past_due, -debt_sale_proceeds_received, -loan_status,
+         -loan_default_reason_description, -loan_status_description, -next_payment_due_date,
+         -origination_date, -interest_paid, -borrower_rate, -principal_balance)
 
 # Remove duplicates
 print("Duplicated rows removed: ")
@@ -67,27 +69,108 @@ sum(duplicated(df_all_years))
 df_all_years <- unique(df_all_years)
 
 # Remove rows with NA
-before_na <- dim(df_all_years)[1]
-df_all_years <- drop_na(df_all_years)
-after_na <- dim(df_all_years)[1]
-print("Rows with NA removed: ")
-after_na - before_na
+# before_na <- dim(df_all_years)[1]
+# df_all_years <- drop_na(df_all_years)
+# after_na <- dim(df_all_years)[1]
+# print("Rows with NA removed: ")
+# after_na - before_na
 
 training_data <- sample_frac(df_all_years, .7)
 testing_data <- anti_join(df_all_years, training_data)
 
 
+########################
+# Import PEOPLE data
+
+
+people_2005 <- read_csv('~/Desktop/LoanAnalysis/data/people_2005to2013.csv') %>% 
+  mutate(file = 2005
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+people_2013 <- read_csv('~/Desktop/LoanAnalysis/data/people_2013.csv') %>% 
+  mutate(file = 2013
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+people_2014 <- read_csv('~/Desktop/LoanAnalysis/data/people_2014.csv') %>% 
+  mutate(file = 2014
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+people_2015 <- read_csv('~/Desktop/LoanAnalysis/data/people_2015.csv') %>% 
+  mutate(file = 2015
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+people_2016 <- read_csv('~/Desktop/LoanAnalysis/data/people_2016.csv') %>% 
+  mutate(file = 2016
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+people_2017 <- read_csv('~/Desktop/LoanAnalysis/data/people_2017.csv') %>% 
+  mutate(file = 2017
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd)
+         ,prosper_score = as.integer(prosper_score))
+
+people_2018 <- read_csv('~/Desktop/LoanAnalysis/data/people_2018.csv') %>% 
+  mutate(file = 2018
+         ,prior_prosper_loans31dpd = as.integer(prior_prosper_loans31dpd)
+         ,prior_prosper_loans61dpd = as.integer(prior_prosper_loans61dpd))
+
+df_all_people <- bind_rows(people_2005, people_2013, people_2014, people_2015, people_2016, people_2017
+                           , people_2018) %>% 
+  mutate(listing_status = factor(listing_status)
+         ,listing_status_reason = factor(listing_status_reason)
+         ,group_indicator = factor(group_indicator)
+         ,lender_indicator = factor(lender_indicator)
+         ,income_verifiable = factor(income_verifiable)
+         ,listing_term = factor(listing_term)
+         ,prosper_rating = factor(prosper_rating)
+         ,partial_funding_indicator = factor(partial_funding_indicator))
+
+
+########################
+# Clean PEOPLE data
+
+glimpse(df_all_people)
+
+# BY STATE
+count(df_all_people, borrower_state) %>% 
+  arrange(desc(n))
+
+ggplot(df_all_people) +
+  geom_bar(aes(borrower_state))
+
+# Example correlation function
+corr(vector, vector)
+
+# Example Scatterplot function
+ggplot(df_all_people) +
+  geom_point(aes(x = lender_yield, y = prosper_rating))
+
+
 #####################
 # Descriptive Statistics
 
-# aggregates <- df_all_years %>%
-#   group_by(lost_money, prosper_rating) %>%
-#   summarise(median_amt_borrowed = median(amount_borrowed)
-#             ,median_rate = median(borrower_rate)
-#             ,count = n())
-# 
-# (aggregates <- unique(aggregates) %>%
-#     arrange(prosper_rating, lost_money))
+glimpse(df_all_years)
+
+aggregates <- df_all_years %>%
+  group_by(lost_money, prosper_rating) %>%
+  summarise(median_amt_borrowed = median(amount_borrowed)
+            ,median_principal_paid = median(principal_paid)
+            ,median_service_fees = median(service_fees_paid)
+            ,median_prosper_fees = median(prosper_fees_paid)
+            ,median_late_fees = median(late_fees_paid)
+            ,median_next_payment_amt = median(next_payment_due_amount)
+            ,mean_term = mean(term)
+            ,count = n())
+
+warnings(aggregates)
+
+(aggregates <- unique(aggregates) %>%
+    arrange(prosper_rating, lost_money))
 
 
 #############################
@@ -202,26 +285,18 @@ stop()
 
 
 training_predictors <- select(training_data, -lost_money)
-training_predictors <- select(training_data, -lost_money)
-testing_response <- select(testing_data, lost_money)
+testing_predictors <- select(testing_data, -lost_money)
+training_response <- training_data$lost_money
 
-trControl <- trainControl(method  = "cv", number  = 5)
-
-fit <- train(lost_money ~ .,
-             method     = "knn",
-             tuneGrid   = expand.grid(k = 1:10),
-             trControl  = trControl,
-             metric     = "Accuracy",
-             data       = training_data)
-
-# knn_model <- knn(training_predictions, testing_predictors, training_response, k = )
+knn_model <- knn(training_predictors, testing_predictors, training_response, k = 3) # Error?????????????
 
 
 ##########################
 # Boosted Tree
 
-# df_2014[rowSums(is.na(df_2014)) > 0,]
-# 
-# boosted_model <- gbm(lost_money ~ ., data = df_2014, distribution = 'bernoulli'
-#                      , n.trees = 5000, interaction.depth = 2, shrinkage = .01)
-# summary(boosted_model)
+
+boosted_model <- gbm(lost_money ~ ., data = training_data, distribution = 'bernoulli'
+                     , n.trees = 500, interaction.depth = 2, shrinkage = .01)
+summary(boosted_model)
+
+boosted_predictions <- predict.gbm(boosted_model, testing_data, n.trees = 500, type = 'response') #Wtf????????????????
