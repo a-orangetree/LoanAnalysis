@@ -5,6 +5,7 @@ library(lubridate)
 library(class)
 library(gbm)
 library(gridExtra)
+library(knitr)
 
 # TODO:
 # 1. Figure out error for linear model
@@ -17,44 +18,70 @@ library(gridExtra)
 # Import LOAN data
 
 # df_2005 <- read_csv('data/Loans_20050101to20130101_20180415T060005.csv') # Has problems (753 rows)
-
-df_2013 <- read_csv('data/Loans_20130101to20140101_20180415T060158.csv') %>% 
-  mutate(year = 2013)
-df_2014 <- read_csv('data/Loans_20140101to20150101_20180415T060226.csv') %>% 
-  mutate(year = 2014)
-df_2015 <- read_csv('data/Loans_20150101to20160101_20180415T060359.csv') %>% 
-  mutate(year = 2015)
-# df_2016 <- read_csv('data/Loans_20160101to20170101_20180415T060742.csv') %>%
-# mutate(year = 2016)
-df_2017 <- read_csv('data/Loans_20170101to20180101_20180415T060911.csv') %>% 
-  mutate(year = 2017)
+df_2013 <- read_csv('data/Loans_20130101to20140101_20180415T060158.csv') %>% mutate(year = 2013)
+df_2014 <- read_csv('data/Loans_20140101to20150101_20180415T060226.csv') %>% mutate(year = 2014)
+df_2015 <- read_csv('data/Loans_20150101to20160101_20180415T060359.csv') %>% mutate(year = 2015)
+# df_2016 <- read_csv('data/Loans_20160101to20170101_20180415T060742.csv') %>% mutate(year = 2016)
+df_2017 <- read_csv('data/Loans_20170101to20180101_20180415T060911.csv') %>% mutate(year = 2017)
 df_2018 <- read_csv('data/Loans_20180101toCurrent_20180415T061114.csv') %>% 
   mutate(year = 2018
          ,loan_default_reason = as.integer(loan_default_reason))
 
 df_all_years <- bind_rows(df_2013, df_2014, df_2015, df_2017, df_2018)
-df_all_year_raw <- df_all_years
+df_all_years_raw <- df_all_years
 
-unique(df_all_years$loan_status_description)
+# Change datatypes of select columns to factor
+df_all_years <- df_all_years %>% 
+  mutate(lost_money = factor(ifelse(loan_status_description == 'COMPLETED', 1, 0)) #need to confirm this!!!!!!!!!!!!!!!!!!!!
+         ,late_fees_flag = factor(ifelse(late_fees_paid == 0, 0, 1))
+         ,prosper_rating = factor(prosper_rating)
+         ,service_fees_paid = service_fees_paid * -1
+         ,total_paid = principal_paid + service_fees_paid + interest_paid + prosper_fees_paid + late_fees_paid
+         ,total_fees_paid = service_fees_paid + interest_paid + prosper_fees_paid + late_fees_paid
+         # ,month_of_origination = factor(month(origination_date)) creates error when modeling???????
+         ,term = factor(term))
+
+glimpse(df_all_years)
+
+#####################
+# Descriptive Statistics
+
+
+aggregates <- df_all_years %>%
+  group_by(lost_money, prosper_rating) %>%
+  summarise(count = n()
+            ,median_amt_borrowed = median(amount_borrowed)
+            ,total_paid = median(total_paid)
+            ,total_fees_paid = median(total_fees_paid)
+            ,median_principal_paid = median(principal_paid)
+            ,median_service_fees = median(service_fees_paid))
+
+aggregates %>% arrange(prosper_rating, lost_money) %>% kable()
+
+
+# Notice we have some "COMPLETED" with payments due....
+unique(filter(df_all_years_raw, next_payment_due_amount != 0)$loan_status_description)
+have_payment_due <- filter(df_all_years_raw, next_payment_due_amount != 0)
+glimpse(filter(have_payment_due, loan_status_description == 'COMPLETED'))
+
+arrange(count(have_payment_due, loan_status_description), desc(n))
+
+# And we have some "CURRENT" with no payments due...
+unique(filter(df_all_years_raw, next_payment_due_amount == 0)$loan_status_description)
+have_NO_payment_due <- filter(df_all_years_raw, next_payment_due_amount == 0)
+glimpse(filter(have_NO_payment_due, loan_status_description == 'CURRENT'))
+
+arrange(count(have_NO_payment_due, loan_status_description), desc(n))
+
+
+######################
+# Clean LOAN data based on EDA above
 
 
 # Remove loans which are currently outstanding or were cancelled
 df_all_years <- df_all_years %>% 
-  filter(!loan_status_description %in% c('CURRENT', 'CANCELLED'))
-
-unique(df_all_years$loan_status_description)
-
-
-######################
-# Clean LOAN data
-
-
-# Change datatypes of select columns to factor
-df_all_years <- df_all_years %>% 
-  mutate(lost_money = factor(ifelse(loan_status_description == 'COMPLETED', 1, 0))
-         ,prosper_rating = factor(prosper_rating)
-         # ,month_of_origination = factor(month(origination_date)) error when modeling????????????????????????
-         ,term = factor(term))
+  filter(loan_status_description == 'COMPLETED' & next_payment_due_amount == 0
+         , loan_status_description %in% c('DEFAULTED', 'CHARGEOFF'))
 
 # Remove redundant or non-useful columns
 df_all_years <- df_all_years %>%
@@ -67,37 +94,15 @@ print("Duplicated rows removed: ")
 sum(duplicated(df_all_years))
 df_all_years <- unique(df_all_years)
 
-# Remove rows with NA
+# Remove rows with NA - Do not do. This will remove too much data.
 # before_na <- dim(df_all_years)[1]
 # df_all_years <- drop_na(df_all_years)
 # after_na <- dim(df_all_years)[1]
 # print("Rows with NA removed: ")
 # after_na - before_na
 
-training_data <- sample_frac(df_all_years, .7)
+training_data <- sample_frac(df_all_years, .8)
 testing_data <- anti_join(df_all_years, training_data)
-
-
-#####################
-# Descriptive Statistics
-
-glimpse(df_all_years)
-
-aggregates <- df_all_years %>%
-  group_by(lost_money, prosper_rating) %>%
-  summarise(median_amt_borrowed = median(amount_borrowed)
-            ,median_principal_paid = median(principal_paid)
-            ,median_service_fees = median(service_fees_paid)
-            ,median_prosper_fees = median(prosper_fees_paid)
-            ,median_late_fees = median(late_fees_paid)
-            ,median_next_payment_amt = median(next_payment_due_amount)
-            ,mean_term = mean(term)
-            ,count = n())
-
-warnings(aggregates)
-
-(aggregates <- unique(aggregates) %>%
-    arrange(prosper_rating, lost_money))
 
 
 #############################
