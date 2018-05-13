@@ -58,18 +58,21 @@ df_all_years <- df_all_years %>%
 #          ,loan_status_description %in% c('DEFAULTED', 'CHARGEOFF'))
 
 
-# Remove redundant or non-useful columns
+# Determines the number of NAs in each column
+# sapply(df_all_years, function(x) sum(is.na(x)))
+
+
+# Removes redundant or non-useful columns
+# Removed loan_default_reason[_description] because of the high number of NAs (600K+)
+# Removed loan_status[_description] because it contains too much information for training
 df_all_years <- df_all_years %>%
-  select(-loan_default_reason, -days_past_due, -debt_sale_proceeds_received, -loan_status,
-         -loan_default_reason_description, -loan_status_description, -next_payment_due_date,
-         -origination_date, -interest_paid, -borrower_rate, -principal_balance, -year,
-         -principal_paid, -loan_number, -total_paid, -total_fees_paid)
+  select(-loan_default_reason, -loan_default_reason_description, -loan_status, -loan_status_description)
 
 
-# Remove duplicates
-print("Duplicated rows removed: ")
-sum(duplicated(df_all_years))
-df_all_years <- unique(df_all_years)
+# Remove duplicates - Commented out since it doesn't remove anything
+# print("Duplicated rows removed: ")
+# sum(duplicated(df_all_years))
+# df_all_years <- unique(df_all_years)
 
 
 # Remove rows with NA 
