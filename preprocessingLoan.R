@@ -28,8 +28,6 @@ df_2018 <- df_2018 %>% mutate(loan_default_reason = as.integer(loan_default_reas
 df_all_years <- bind_rows(df_2013, df_2014, df_2015, df_2017, df_2018)
 df_all_years_raw <- df_all_years
 
-unique(df_all_years$loan_status_description)
-
 
 # FOLLOW-UP: did we define money lost correctly? Needs confirmation.
 # This is tied to the FOLLOW-UP below.
