@@ -66,8 +66,11 @@ df_all_years <- df_all_years %>%
 # Removed loan_default_reason[_description] because of the high number of NAs (600K+)
 # Removed loan_status[_description] because it contains too much information for training
 df_all_years <- df_all_years %>%
-  select(-loan_default_reason, -loan_default_reason_description, -loan_status, -loan_status_description)
+  select(-loan_default_reason, -loan_default_reason_description, -loan_status, -loan_status_description
+         ,-loan_number, -year, -origination_date, -days_past_due, -late_fees_paid, -debt_sale_proceeds_received
+         ,-late_fees_flag, -has_next_payment_flag, -next_payment_due_amount, -next_payment_due_date)
 
+# glimpse(df_all_years)
 
 # Remove duplicates - Commented out since it doesn't remove anything
 # print("Duplicated rows removed: ")

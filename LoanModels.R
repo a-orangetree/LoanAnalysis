@@ -9,9 +9,8 @@ library(glmnet)
 #### Logistic Regression #################
 
 df_all_years_linear <- df_all_years %>%
-  select(-days_past_due, -debt_sale_proceeds_received, -next_payment_due_date,
-         -origination_date, -interest_paid, -borrower_rate, -principal_balance, -year,
-         -principal_paid, -loan_number, -total_paid, -total_fees_paid)
+  select(-interest_paid, -borrower_rate, -principal_balance, 
+         -principal_paid, -total_paid, -total_fees_paid)
 
 
 training_data_linear <- sample_frac(df_all_years_linear, .8)
@@ -28,7 +27,7 @@ testing_predictions <- add_predictions(testing_data_linear, linear_model, var = 
         ,linear_pred_count = ifelse(linear_pred == lost_money, TRUE, FALSE))
  
 
-mean(testing_predictions$linear_pred_count)
+mean(testing_predictions$linear_pred_count) ~.64
 
 
 ###### Ridge Regression ############
@@ -52,7 +51,7 @@ testing_data_glm <- testing_data_glm %>%
   mutate(pred_ridge = predict(ridge_model, s = best_lambda, newx = x_val, type = 'class')
          ,accuracy_ridge = ifelse(pred_ridge == lost_money, 1, 0))
 
-mean(testing_data_glm$accuracy_ridge)
+mean(testing_data_glm$accuracy_ridge) ~.75
 
 
 ###### Lasso ############
