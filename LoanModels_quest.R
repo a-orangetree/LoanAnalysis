@@ -72,10 +72,11 @@ testing_predictions <- add_predictions(testing_data_linear, linear_model, var = 
         ,linear_pred_count = ifelse(linear_pred == lost_money, TRUE, FALSE))
  
 
-(linear_accuracy <- tibble(mean(testing_predictions$linear_pred_count))) #~.64
+linear_accuracy <- tibble(mean(testing_predictions$linear_pred_count)) #~.64
 
 
 ###### Ridge Regression ############
+
 
 df_all_years_glmnet <- drop_na(df_all_years)
 
@@ -96,7 +97,7 @@ testing_data_glm <- testing_data_glm %>%
   mutate(pred_ridge = predict(ridge_model, s = best_lambda, newx = x_val, type = 'class')
          ,accuracy_ridge = ifelse(pred_ridge == lost_money, 1, 0))
 
-(ridge_reg_accuracy <- tibble(mean(testing_data_glm$accuracy_ridge))) #~.75
+ridge_reg_accuracy <- tibble(mean(testing_data_glm$accuracy_ridge)) #~.75
 
 
 ###### Lasso ############
@@ -113,7 +114,7 @@ testing_data_glm <- testing_data_glm %>%
   mutate(pred_lasso = predict(lasso_model, s = best_lambda, newx = x_val, type = 'class')
          ,accuracy_lasso = ifelse(pred_lasso == lost_money, 1, 0))
 
-(lasso_accuracy <- tibble(mean(testing_data_glm$accuracy_lasso))) #~.88
+lasso_accuracy <- tibble(mean(testing_data_glm$accuracy_lasso)) #~.88
 
 
 ###### KNN ############
@@ -128,16 +129,44 @@ training_predictors <- model.matrix(~ ., data = select(training_data, -lost_mone
 testing_predictors <- model.matrix(~ ., data = select(testing_data, -lost_money))
 training_response <- select(training_data, lost_money) %>%  as.matrix()
 
-knn_model <- knn(training_predictors, testing_predictors, training_response, k = 3)
+knn_accuracies <- tibble(k = 0, accuracy = 0)
 
+knn_function <- function(list_of_k) {
+  
+  for (x in list_of_k) {
+    
+    knn_model <- knn(training_predictors, testing_predictors, training_response, k = x)
+    
+    testing_knn <- testing_data %>% 
+      mutate(accuracy = ifelse(lost_money == knn_model, 1, 0))
+    
+    knn_accuracies <- add_row(knn_accuracies, k = x, accuracy = mean(testing_knn$accuracy))
+    
+    write_csv(knn_accuracies, '/projects/p30546/LoanAnalysis/knn_accuracies.csv')
+  }
+}
+
+list_of_k <- list(1, 3, 5, 10, 25, 50, 100)
+knn_function(list_of_k)
+
+knn_accuracies <- read_csv('/projects/p30546/LoanAnalysis/knn_accuracies.csv') %>% 
+    filter(rmse != 0) %>% 
+    arrange(desc(accuracy)) %>% 
+    head(1)
+
+knn_model <- knn(training_predictors, testing_predictors, training_response, k = knn_accuracies$k)
 
 testing_knn <- testing_data %>% 
   mutate(accuracy = ifelse(lost_money == knn_model, 1, 0))
 
-(knn_accuracy <- tibble(mean(testing_knn$accuracy)))
+knn_accuracy <- tibble(mean(testing_knn$accuracy))
 
 
 #### Boosted Tree ##########
+
+
+boost_accuracies <- tibble(number_of_rounds = 0, best_iteration = 0, best_ntreelimit = 0
+                          , eta = 0, gamma = 0, max_depth = 0, rmse = 0)
 
 training_data_boost <- sample_frac(drop_na(df_all_years), .8)
 testing_data_boost <- anti_join(drop_na(df_all_years), training_data_boost)
@@ -145,19 +174,59 @@ testing_data_boost <- anti_join(drop_na(df_all_years), training_data_boost)
 x <- select(training_data_boost, -lost_money) 
 y <- training_data_boost$lost_money %>% as.matrix()
 
-xgboost_cv <- xgb.cv(data = model.matrix(~ ., data = x)
-                        , label = y
-                        , nrounds = 10000
-                        , early_stopping_rounds = 10
-                        , nfold = 10
-                        , objective = "binary:logistic"
-                        ,verbose = FALSE)
+boosted_func <- function(number_of_rounds, learning_rates, list_of_gammas, max_depths) {  
+  
+  for (round in number_of_rounds) {
+    for (rate in learning_rates) {
+      for (gamma in list_of_gammas) {
+        for (depth in max_depths) {
+            
+            xgboost_cv <- xgb.cv(data = model.matrix(~ ., data = x)
+                                    , label = y
+                                    , early_stopping_rounds = 10
+                                    , nfold = 10
+                                    , objective = "binary:logistic"
+                                    ,verbose = FALSE
+                                    , nrounds = round
+                                    , eta = rate
+                                    , gamma = gamma
+                                    , max_depth = depth)
+            
+            boost_accuracies <- add_row(boost_accuracies
+                                        , number_of_rounds = round
+                                        , best_iteration = xgboost_cv$best_iteration
+                                        , best_ntreelimit = xgboost_cv$best_ntreelimit
+                                        , eta = rate
+                                        , gamma = gamma
+                                        , max_depth = depth
+                                        , rmse = xgboost_cv$evaluation_log$test_rmse_mean[xgboost_cv$best_iteration])
+        }
+      }
+    }
+  }
+  write_csv(boost_accuracies, '/projects/p30546/LoanAnalysis/boost_accuracies.csv')
+}
+
+number_of_rounds <- list(100, 500, 1000, 2500, 5000, 10000)
+learning_rates <- list(.001, .003, .005, .01, .03, .05, .1)
+list_of_gammas <- list(1, 5, 20, 50, 100)
+max_depths <- list(2, 4, 6, 10, 20)
+
+boosted_func(number_of_rounds, learning_rates, list_of_gammas, max_depths)
+
+boost_accuracies <- read_csv('/projects/p30546/LoanAnalysis/boost_accuracies.csv') %>% 
+    filter(rmse != 0) %>% 
+    arrange(rmse) %>% 
+    head(1)
 
 xgboost_model <- xgboost(data = model.matrix(~ ., data = x)
                         , label = y
-                        , nrounds = dim(xgboost_cv$evaluation_log)[1]
                         , objective = "binary:logistic"
-                        , verbose = FALSE)
+                        , verbose = FALSE
+                        , nrounds = boost_accuracies$number_of_rounds
+                        , eta = boost_accuracies$rate
+                        , gamma = boost_accuracies$gamma
+                        , max_depth = boost_accuracies$max_depth)
 
 dtrain <- xgb.DMatrix(data = model.matrix(~ ., data = testing_data_boost))
 
@@ -166,10 +235,11 @@ testing_data_boost <- testing_data_boost %>%
          ,pred_boost = ifelse(prob_boost >= .5, 1, 0)
          ,accuracy_boost = ifelse(pred_boost == lost_money, 1, 0))
 
-(boosted_accuracy <- tibble(mean(testing_data_boost$accuracy_boost))) #~.84
+boosted_accuracy <- tibble(mean(testing_data_boost$accuracy_boost)) #~.84
 
 
 ########## Random Forest ##################
+
 
 df_all_year_rf <- drop_na(df_all_years)
 
@@ -193,7 +263,7 @@ rf_function <- function(number_of_trees, mtries, min_observations, terminal_node
   
             testing_data_rf <- testing_data_rf %>% mutate(pred_rf = predict(rf_model, testing_data))
   
-            rf_accuracy <- tibble(mean(testing_data_rf$accuracy))
+            rf_accuracy <- mean(testing_data_rf$accuracy)
             
             rf_grid_search <- add_row(rf_grid_search, number_of_trees = tree_size
                                       ,mtry = n_pred
@@ -229,12 +299,13 @@ rf_model <- randomForest(lost_money ~ ., data = training_data_rf
 
 testing_data_rf <- testing_data_rf %>% mutate(pred_rf = predict(rf_model, testing_data))
 
-(rf_accuracy <- tibble(mean(testing_data_rf$accuracy)))
+rf_accuracy <- tibble(mean(testing_data_rf$accuracy))
 
 
 ########## Combined Accuracies #####################
 
+
 combined_accuracies <- bind_rows(linear_accuracy, ridge_reg_accuracy, lasso_accuracy, boosted_accuracy
                                  ,knn_accuracy, rf_accuracy)
 
-write_csv(combined_accuracies, 'data/model_accuracies')
+write_csv(combined_accuracies, '/projects/p30546/LoanAnalysis/model_accuracies.csv')
