@@ -68,13 +68,9 @@ df_all_years <- df_all_years %>%
          ,-loan_number, -year, -origination_date, -days_past_due, -late_fees_paid, -debt_sale_proceeds_received
          ,-late_fees_flag, -has_next_payment_flag, -next_payment_due_amount, -next_payment_due_date)
 
-# glimpse(df_all_years)
+df_all_years <- drop_na(df_all_years)
 
 # Remove duplicates - Commented out since it doesn't remove anything
 # print("Duplicated rows removed: ")
 # sum(duplicated(df_all_years))
 # df_all_years <- unique(df_all_years)
-
-
-# Remove rows with NA 
-# df_all_years <- drop_na(df_all_years) # Do not do this. Will remove too much data.

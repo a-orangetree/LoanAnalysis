@@ -1,0 +1,250 @@
+---
+title: "How to Lose Money by Lending on Prosper?"
+author: "Adrian Naranjo"
+---
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(ggthemes)
+
+library(class)
+library(modelr)
+library(car)
+library(xgboost)
+library(randomForest)
+library(glmnet)
+
+theme_set(theme_fivethirtyeight())
+
+set.seed(10)
+
+df_2013 <- read_csv('data/Loans_20130101to20140101_20180415T060158.csv') %>% mutate(year = 2013)
+df_2014 <- read_csv('data/Loans_20140101to20150101_20180415T060226.csv') %>% mutate(year = 2014)
+df_2015 <- read_csv('data/Loans_20150101to20160101_20180415T060359.csv') %>% mutate(year = 2015)
+df_2017 <- read_csv('data/Loans_20170101to20180101_20180415T060911.csv') %>% mutate(year = 2017)
+df_2018 <- read_csv('data/Loans_20180101toCurrent_20180415T061114.csv') %>% mutate(year = 2018)
+
+
+df_2018 <- df_2018 %>% mutate(loan_default_reason = as.integer(loan_default_reason))
+
+
+df_all_years <- bind_rows(df_2013, df_2014, df_2015, df_2017, df_2018)
+df_all_years_raw <- df_all_years
+
+
+df_all_years <- df_all_years %>% 
+  mutate(lost_money = factor(ifelse(loan_status_description == 'COMPLETED' & next_payment_due_amount == 0, 0, 1)
+                             , levels = c(0, 1))
+         ,late_fees_flag = factor(ifelse(late_fees_paid == 0, 0, 1))
+         ,has_next_payment_flag = factor(ifelse(next_payment_due_amount == 0, 0, 1), levels = c(0, 1))
+         ,prosper_rating = factor(prosper_rating, levels = c('AA', 'A', 'B', 'C', 'D', 'E', 'HR'))
+         ,term = factor(term)
+         ,year = factor(year)
+         ,loan_status_description = factor(loan_status_description)
+         ,service_fees_paid = service_fees_paid * -1
+         ,total_paid = principal_paid + service_fees_paid + interest_paid + prosper_fees_paid + late_fees_paid
+         ,total_fees_paid = service_fees_paid + interest_paid + prosper_fees_paid + late_fees_paid
+         ,month_of_origination = month(origination_date))
+
+df_all_years <- df_all_years %>%
+  select(-loan_default_reason, -loan_default_reason_description, -loan_status, -loan_status_description
+         ,-loan_number, -year, -origination_date, -days_past_due, -late_fees_paid, -debt_sale_proceeds_received
+         ,-late_fees_flag, -has_next_payment_flag, -next_payment_due_amount, -next_payment_due_date)
+
+df_all_years <- drop_na(df_all_years)
+
+training_data <- sample_frac(df_all_years, .75)
+testing_data <- anti_join(df_all_years, training_data)
+
+mod <- read_csv('data/model_accuracies.csv')
+```
+
+
+#### **The Question**: Can we predict Microlending Loan Defaults (on a website called Prosper)?
+
+Note: please see the preliminary descriptive analysis entitled EDA.html.
+
+<br>
+
+### Model 1: Logistic Regression
+
+Using all predictors lead to very high multicollinearity. Thus, only the following columns were included:
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+c("amount_borrowed","prosper_rating","term","age_in_months","service_fees_paid","prosper_fees_paid","lost_money") %>% 
+  kable(col.names = c('Logistic Regression Variables'), format = 'html') %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+```
+
+<br>
+
+All the predictors returned as significant, however the accuracy of the model was only 65%.
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+############ Logistic Regression #####################
+linear_accuracy <- round(drop_na(select(mod, contains('linear'))), 3)
+
+linear_accuracy %>% 
+  kable(align = c('c'), col.names = c('Logistic Regression Accuracy'), format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
+```
+
+<br>
+
+### Model 2: Ridge Regression
+
+Ridge Regression and Lasso models were also fit. Unlike Logistic Regression, however, they were passed all variables available. Their time needed to train the model was very long (Lasso is far worse than Ridge) due to the size of the dataset, and thus they were run Northwestern's Quest Computing Cluster. All variables were used for these models.
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+###### Ridge Regression ############
+ridge_reg_accuracy <- round(drop_na(select(mod, contains('ridge'))),3)
+
+ridge_reg_accuracy %>% 
+  kable(align = c('c'), col.names = c('Ridge Regression Accuracy'), format = 'html') %>% 
+  kableExtra::kable_styling(full_width = F, position = "left")
+```
+
+<br>
+
+### Model 3: Lasso
+
+Lasso clearly performs better than Ridge Regression. This could be because not all variables used in the model are good predictors of whether money will be lost. We already know from Logistic Regression that there is high collinearity among predictors and, hence, information contained in one variable may make another redundant. 
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+########### Lasso ##################
+lasso_accuracy <- round(drop_na(select(mod, contains('lasso'))), 3)
+
+lasso_accuracy %>% 
+  kable(align = c('c'), col.names = c('Lasso Accuracy'), format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
+```
+
+<br>
+
+### Model 4: K-Nearest Neighbor
+
+K-Nearest Neighbor performed extremely well when using a k of 3, achieving a test accuracy of above 90%. It used all possible variables.
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+############ KNN ##############################
+knn_accuracy <- round(drop_na(select(mod, contains('knn'))), 3)
+
+knn_accuracy %>% 
+  kable(align = c('c'), col.names = c('KNN Accuracy'), format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
+```
+
+<br>
+
+To find the optimal k, a grid search was performed using several hand-picked values with the result displayed below. Like Ridge Regression and Lasso, KNN had terrible performance and thus was also run on Quest. 
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+##### Plot for KNN Grid Search ##############
+knn_accuracies_quest <- read_csv('data/knn_accuracies.csv') %>% 
+  filter(!accuracy == 0) %>% 
+  arrange(desc(accuracy))
+
+ggplot(knn_accuracies_quest, aes(x = k, y = accuracy)) +
+  geom_point(size = 4) +
+  ggtitle('Grid Search for Best k') +
+  labs(x = 'K', y = 'Accuracy')
+```
+
+<br>
+
+### Model 5: Boosted Tree
+
+Using all variables a Boosted model performs very well given the following parameters:
+
+* Number of Rounds = **100**
+* ETA = **.1**
+* Gamma = **5**
+* Max Depth = **20**
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+#### Boosted Tree ##########
+xgboost_accuracies_quest <- read_csv('data/boost_accuracies.csv') %>% 
+  filter(!error == 0) %>% 
+  mutate(accuracy = round(1 - error, 3)) %>% 
+  select(accuracy) %>% 
+  arrange(desc(accuracy)) %>% 
+  head(1)
+
+boosted_accuracy <- xgboost_accuracies_quest
+
+boosted_accuracy %>% 
+  kable(align = c('c'), col.names = c('Boosted Tree Accuracy'), format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
+```
+
+<br>
+
+To obtain these parameters a grid search was performed using Quest. Below are the top combinations which appeared and their respective accuracies:
+
+<br>
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+######### Graph for Best XgBoost Parameters ############
+xgboost_accuracies_quest <- read_csv('data/boost_accuracies.csv') %>% 
+  filter(!error == 0) %>% 
+  mutate(accuracy = round(1 - error, 3)) %>% 
+  select(-error) %>% 
+  arrange(desc(accuracy)) %>% 
+  head(5) 
+
+kable(xgboost_accuracies_quest, align = c(rep('c', 7)), format = 'html') %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), position = "left")
+```
+
+<br>
+
+### Model 6: Random Forest
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+######### Graph for Best Random Forest Parameters ############
+# rf_accuracies_quest <- read_csv('data/rf_grid_search.csv') %>% 
+#   filter(!error == 0) %>% 
+#   arrange(error) %>% 
+#   head(10) 
+# 
+# kable(rf_accuracies_quest)
+```
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+######### Random Forest ####################
+
+```
+
+<br>
+
+### Accuracy Recap
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+accuracies <- tibble(model = c('Logistic Regression', 'Ridge Regression', 'Lasso', 'KNN', 'Boosted Tree')
+                     ,accuracy = as.double(c(linear_accuracy, ridge_reg_accuracy, lasso_accuracy, knn_accuracy, boosted_accuracy))) 
+
+accuracies <- accuracies %>% mutate(accuracy = round(accuracy, 3))
+
+kable(accuracies, align = c(rep('c', 5)), format = 'html') %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "left") 
+```

@@ -1,0 +1,5 @@
+mean(testing_predictions$linear_pred_count),mean(testing_data_glm$accuracy_ridge),mean(testing_data_glm$accuracy_lasso),mean(testing_data_boost$accuracy_boost)
+0.6475527806251876,NA,NA,NA
+NA,0.7534953443454697,NA,NA
+NA,NA,0.8872072799254326,NA
+NA,NA,NA,0.8426682001150086
