@@ -16,14 +16,9 @@ testing_data <- anti_join(df_all_years, training_data)
 #### Logistic Regression #################
 
 
-# Columns were removed due to high multicollinearity
-training_data_linear <- training_data %>%
-  select(-interest_paid, -borrower_rate, -principal_balance, 
-         -principal_paid, -total_paid, -total_fees_paid)
-
-linear_model <- glm(lost_money ~ ., data = training_data_linear, family = 'binomial')
+linear_model <- glm(lost_money ~ ., data = training_data, family = 'binomial')
 summary(linear_model)
-# vif(linear_model)
+vif(linear_model)
 
 testing_predictions <- add_predictions(testing_data, linear_model, var = 'linear_prob') %>% 
  mutate(linear_pred = ifelse(linear_prob > .5, 1, 0)

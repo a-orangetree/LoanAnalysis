@@ -66,7 +66,9 @@ df_all_years <- df_all_years %>%
 df_all_years <- df_all_years %>%
   select(-loan_default_reason, -loan_default_reason_description, -loan_status, -loan_status_description
          ,-loan_number, -year, -origination_date, -days_past_due, -late_fees_paid, -debt_sale_proceeds_received
-         ,-late_fees_flag, -has_next_payment_flag, -next_payment_due_amount, -next_payment_due_date)
+         ,-late_fees_flag, -has_next_payment_flag, -next_payment_due_amount, -next_payment_due_date
+         ,-total_fees_paid, -principal_paid, -principal_balance, -total_paid, -interest_paid # These are recent
+         ,-service_fees_paid, -prosper_fees_paid, -age_in_months) # These are recent
 
 df_all_years <- drop_na(df_all_years)
 
