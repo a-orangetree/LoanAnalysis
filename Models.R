@@ -13,6 +13,7 @@ training_data <- sample_frac(df_all_years, .75)
 testing_data <- anti_join(df_all_years, training_data)
 
 
+stop()
 #### Logistic Regression #################
 
 
@@ -28,6 +29,7 @@ testing_predictions <- add_predictions(testing_data, linear_model, var = 'linear
 linear_accuracy <- tibble(mean(testing_predictions$linear_pred_count))
 
 
+stop()
 ###### Ridge Regression ############
 
 
@@ -46,7 +48,7 @@ testing_data_glm <- testing_data %>%
 
 ridge_reg_accuracy <- tibble(mean(testing_data_glm$accuracy_ridge))
 
-
+stop()
 ###### Lasso ############
 
 
@@ -63,26 +65,29 @@ testing_data_glm <- testing_data %>%
 lasso_accuracy <- tibble(mean(testing_data_glm$accuracy_lasso))
 
 
+stop()
 ###### KNN ############
 
 
-training_predictors <- model.matrix(~ ., data = select(training_data, -lost_money))
-testing_predictors <- model.matrix(~ ., data = select(testing_data, -lost_money))
-training_response <- select(training_data, lost_money) %>%  as.matrix()
-
-knn_model <- knn(training_predictors, testing_predictors, training_response, k = 3)
-
-testing_knn <- testing_data %>% 
-  mutate(accuracy = ifelse(lost_money == knn_model, 1, 0))
-
-knn_accuracy <- tibble(mean(testing_knn$accuracy))
+# training_predictors <- model.matrix(~ ., data = select(training_data, -lost_money))
+# testing_predictors <- model.matrix(~ ., data = select(testing_data, -lost_money))
+# training_response <- select(training_data, lost_money) %>%  as.matrix()
+# 
+# knn_model <- knn(training_predictors, testing_predictors, training_response, k = 3)
+# 
+# testing_knn <- testing_data %>% 
+#   mutate(accuracy = ifelse(lost_money == knn_model, 1, 0))
+# 
+# knn_accuracy <- tibble(mean(testing_knn$accuracy))
 
 
 ########## Graph of Grid Search for Best K #################
 
-knn_accuracies_quest <- read_csv('data/knn_accuracies.csv') %>% 
+knn_accuracies_quest <- read_csv('data_lessVariables/knn_accuracies.csv') %>% 
   filter(!accuracy == 0) %>% 
   arrange(desc(accuracy))
+
+knn_accuracy <- knn_accuracies_quest$accuracy
 
 ggplot(knn_accuracies_quest, aes(x = k, y = accuracy)) +
   geom_point(size = 4) +
@@ -92,9 +97,9 @@ ggplot(knn_accuracies_quest, aes(x = k, y = accuracy)) +
 
 #### Boosted Tree ##########
 
-x <- select(training_data, -lost_money) 
-y <- training_data$lost_money %>% as.matrix()
-
+# x <- select(training_data, -lost_money) 
+# y <- training_data$lost_money %>% as.matrix()
+# 
 # xgboost_cv <- xgb.cv(data = model.matrix(~ ., data = x)
 #                         , label = y
 #                         , nrounds = 10000
@@ -102,35 +107,37 @@ y <- training_data$lost_money %>% as.matrix()
 #                         , nfold = 10
 #                         , objective = "binary:logistic"
 #                         ,verbose = FALSE)
-
-xgboost_model <- xgboost(data = model.matrix(~ ., data = x)
-                        , label = y
-                        , nrounds = 100
-                        , eta = .1
-                        , gamma = 5
-                        , max_depth = 20
-                        , objective = "binary:logistic"
-                        , verbose = FALSE)
-
-dtrain <- xgb.DMatrix(data = model.matrix(~ ., data = testing_data))
-
-testing_data_boost <- testing_data %>% 
-  mutate(prob_boost = predict(xgboost_model, dtrain)
-         ,pred_boost = ifelse(prob_boost >= .5, 1, 0)
-         ,accuracy_boost = ifelse(pred_boost == lost_money, 1, 0))
-
-boosted_accuracy <- tibble(mean(testing_data_boost$accuracy_boost))
+# 
+# xgboost_model <- xgboost(data = model.matrix(~ ., data = x)
+#                         , label = y
+#                         , nrounds = 100
+#                         , eta = .1
+#                         , gamma = 5
+#                         , max_depth = 20
+#                         , objective = "binary:logistic"
+#                         , verbose = FALSE)
+# 
+# dtrain <- xgb.DMatrix(data = model.matrix(~ ., data = testing_data))
+# 
+# testing_data_boost <- testing_data %>% 
+#   mutate(prob_boost = predict(xgboost_model, dtrain)
+#          ,pred_boost = ifelse(prob_boost >= .5, 1, 0)
+#          ,accuracy_boost = ifelse(pred_boost == lost_money, 1, 0))
+# 
+# boosted_accuracy <- tibble(mean(testing_data_boost$accuracy_boost))
 
 
 ######### Graph for Best XgBoost Parameters ############
 
 
-xgboost_accuracies_quest <- read_csv('data/boost_accuracies.csv') %>% 
+xgboost_accuracies_quest <- read_csv('data_lessVariables/boost_accuracies.csv') %>% 
   filter(!error == 0) %>% 
   mutate(accuracy = round(1 - error, 3)) %>% 
   select(-error) %>% 
   arrange(desc(accuracy)) %>% 
   head(10) 
+
+boosted_accuracy <- xgboost_accuracies_quest$accuracy
 
 kable(xgboost_accuracies_quest)
 
@@ -138,21 +145,23 @@ kable(xgboost_accuracies_quest)
 ########## Random Forest ##################
 
 
-rf_model <- randomForest(lost_money ~ ., data = training_data, ntrees = 500)
-
-testing_data_rf <- testing_data %>% 
-  mutate(pred_rf = predict(rf_model, testing_data))
-
-rf_accuracy <- tibble(mean(testing_data_rf$accuracy))
+# rf_model <- randomForest(lost_money ~ ., data = training_data, ntrees = 500)
+# 
+# testing_data_rf <- testing_data %>% 
+#   mutate(pred_rf = predict(rf_model, testing_data))
+# 
+# rf_accuracy <- tibble(mean(testing_data_rf$accuracy))
 
 
 ######### Graph for Best Random Forest Parameters ############
 
 
-rf_accuracies_quest <- read_csv('data/rf_grid_search.csv') %>% 
+rf_accuracies_quest <- read_csv('data_lessVariables/rf_grid_search1.csv') %>% 
   filter(!accuracy == 0) %>% 
-  arrange(error) %>% 
+  arrange(accuracy) %>% 
   head(10) 
+
+rf_accuracy <- rf_accuracies_quest$accuracy
 
 kable(rf_accuracies_quest)
 

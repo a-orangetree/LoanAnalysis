@@ -1,5 +1,5 @@
 ---
-title: "How to Lose Money by Lending on Prosper?"
+title: "Lending on Prosper using only Loan Characteristics"
 author: "Adrian Naranjo"
 ---
 
@@ -62,33 +62,45 @@ df_all_years <- drop_na(df_all_years)
 training_data <- sample_frac(df_all_years, .75)
 testing_data <- anti_join(df_all_years, training_data)
 
-mod <- read_csv('data/model_accuracies.csv')
+mod <- read_csv('data_lessVariables/model_accuracies.csv')
 ```
 
 
 #### **The Question**: Can we predict Microlending Loan Defaults (on a website called Prosper)?
 
-Note: please see the preliminary descriptive analysis entitled EDA.html.
+<br>
+
+#### What you should know before reading:
+
+* Our observations consisted of approximately 677K loans from the years 2013, 2014, 2015, 2016, 2017, and 2018. For more information about the data, please view the preliminary descriptive analysis entitled EDA.html in this folder.
 
 <br>
 
-### Model 1: Logistic Regression
-
-Using all predictors lead to very high multicollinearity. Thus, only the following columns were included:
+* The original raw data contained over 20 variables. What was not realized until the modeling process began was that only several of these variables are actually known prior to deciding to lend money on Prosper. Thus, the variables used within the models has been significantly trimmed (columns are displayed below).
 
 <br>
+
+* It was also expected that data about borrowers would be available. While the data was acquired, a means to linking that data to the loan data used has not been found (i.e. there's no common identifier between the datasets).
+
+<br>
+
+* All models were trained and tested on Northwestern's Quest computing cluster due to the size of the dataset.
+
+<br>
+
+#### Columns used:
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
-c("amount_borrowed","prosper_rating","term","age_in_months","service_fees_paid","prosper_fees_paid","lost_money") %>% 
+c("Amount Borrowed","Borrower Rating","Term of Loan","Interest Rate") %>% 
   kable(col.names = c('Logistic Regression Variables'), format = 'html') %>% 
   kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
 ```
 
 <br>
 
-All the predictors returned as significant, however the accuracy of the model was only 65%.
+### Model 1: Logistic Regression
 
-<br>
+All the predictors returned as significant, however there was multicollinearity between "Borrower Rating" and "Interest Rate" (variance inflation factor was at 4).
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ############ Logistic Regression #####################
@@ -103,9 +115,7 @@ linear_accuracy %>%
 
 ### Model 2: Ridge Regression
 
-Ridge Regression and Lasso models were also fit. Unlike Logistic Regression, however, they were passed all variables available. Their time needed to train the model was very long (Lasso is far worse than Ridge) due to the size of the dataset, and thus they were run Northwestern's Quest Computing Cluster. All variables were used for these models.
-
-<br>
+Ridge Regression and Lasso models were fit using cross-validation to attain the best lambda.
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ###### Ridge Regression ############
@@ -113,16 +123,14 @@ ridge_reg_accuracy <- round(drop_na(select(mod, contains('ridge'))),3)
 
 ridge_reg_accuracy %>% 
   kable(align = c('c'), col.names = c('Ridge Regression Accuracy'), format = 'html') %>% 
-  kableExtra::kable_styling(full_width = F, position = "left")
+  kable_styling(full_width = F, position = "left")
 ```
 
 <br>
 
 ### Model 3: Lasso
 
-Lasso clearly performs better than Ridge Regression. This could be because not all variables used in the model are good predictors of whether money will be lost. We already know from Logistic Regression that there is high collinearity among predictors and, hence, information contained in one variable may make another redundant. 
-
-<br>
+Lasso perfored effectively the same as Ridge Regression. Given the small amount of variables, this is not necessarily surprising.
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ########### Lasso ##################
@@ -137,32 +145,19 @@ lasso_accuracy %>%
 
 ### Model 4: K-Nearest Neighbor
 
-K-Nearest Neighbor performed extremely well when using a k of 3, achieving a test accuracy of above 90%. It used all possible variables.
+To find the optimal k, a grid search was performed with the result displayed below.
 
-<br>
-
-```{r, message=FALSE, echo=FALSE, warning=FALSE}
-############ KNN ##############################
-knn_accuracy <- round(drop_na(select(mod, contains('knn'))), 3)
-
-knn_accuracy %>% 
-  kable(align = c('c'), col.names = c('KNN Accuracy'), format = 'html') %>% 
-  kable_styling(full_width = F, position = "left")
-```
-
-<br>
-
-To find the optimal k, a grid search was performed using several hand-picked values with the result displayed below. Like Ridge Regression and Lasso, KNN had terrible performance and thus was also run on Quest. 
-
-<br>
+K-values tested: **1, 3, 5, 10, 25, 50, 75, 100**
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ##### Plot for KNN Grid Search ##############
-knn_accuracies_quest <- read_csv('data/knn_accuracies.csv') %>% 
+knn_accuracies <- read_csv('data_lessVariables/knn_accuracies.csv') %>% 
   filter(!accuracy == 0) %>% 
   arrange(desc(accuracy))
 
-ggplot(knn_accuracies_quest, aes(x = k, y = accuracy)) +
+knn_accuracy <- knn_accuracies$accuracy[1]
+
+ggplot(knn_accuracies, aes(x = k, y = accuracy)) +
   geom_point(size = 4) +
   ggtitle('Grid Search for Best k') +
   labs(x = 'K', y = 'Accuracy')
@@ -172,79 +167,81 @@ ggplot(knn_accuracies_quest, aes(x = k, y = accuracy)) +
 
 ### Model 5: Boosted Tree
 
-Using all variables a Boosted model performs very well given the following parameters:
+To obtain these parameters a grid search was performed using Quest (the parameters and ranges for each can be found below). Furthermore, 10-fold cross-validation was used with an early stopping parameter of 10. 
 
-* Number of Rounds = **100**
-* ETA = **.1**
-* Gamma = **5**
-* Max Depth = **20**
+* Number of rounds: **100, 500, 1000, 2500, 5000, 10000**
+* Learning rate: **.001, .003, .005, .01, .03, .05, .1**
+* Gamma: **1, 5, 20, 50, 100**
+* Max depth: **2, 4, 6, 10, 20**
 
-<br>
-
-```{r, message=FALSE, echo=FALSE, warning=FALSE}
-#### Boosted Tree ##########
-xgboost_accuracies_quest <- read_csv('data/boost_accuracies.csv') %>% 
-  filter(!error == 0) %>% 
-  mutate(accuracy = round(1 - error, 3)) %>% 
-  select(accuracy) %>% 
-  arrange(desc(accuracy)) %>% 
-  head(1)
-
-boosted_accuracy <- xgboost_accuracies_quest
-
-boosted_accuracy %>% 
-  kable(align = c('c'), col.names = c('Boosted Tree Accuracy'), format = 'html') %>% 
-  kable_styling(full_width = F, position = "left")
-```
-
-<br>
-
-To obtain these parameters a grid search was performed using Quest. Below are the top combinations which appeared and their respective accuracies:
-
-<br>
+Below are the top combinations which appeared and their respective accuracies:
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ######### Graph for Best XgBoost Parameters ############
-xgboost_accuracies_quest <- read_csv('data/boost_accuracies.csv') %>% 
+xgboost_accuracies <- read_csv('data_lessVariables/boost_accuracies.csv') %>% 
   filter(!error == 0) %>% 
-  mutate(accuracy = round(1 - error, 3)) %>% 
-  select(-error) %>% 
+  mutate(accuracy = round(1.0 - error, 3)) %>% 
+  select(-error, -number_of_rounds, -best_ntreelimit) %>%
+  rename('number_of_rounds' = 'best_iteration') %>% 
   arrange(desc(accuracy)) %>% 
   head(5) 
 
-kable(xgboost_accuracies_quest, align = c(rep('c', 7)), format = 'html') %>%
-  kable_styling(bootstrap_options = c("striped", "hover"), position = "left")
+boosted_accuracy <- xgboost_accuracies$accuracy[1]
+
+kable(xgboost_accuracies, format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
 ```
 
 <br>
 
 ### Model 6: Random Forest
 
+Similar to boosted tree models, random forest models were fit and the parameters used to achieve the best accuracy were found through a grid search. Out-of-bag accuracy was used instead of out-of-sample. 
+
+* Number of trees: **100, 500, 1000, 2000, 4000, 5000, 7500, 10000**
+* Number of variables considered at each step: **1, 2, 3, 4**
+* Minimum observations in each node: **1, 10, 25, 50, 100, 150**
+* Number of terminal nodes:  **100, 500, 1000, 2500**
+
+Below are the top combinations which appeared and their respective accuracies:
+
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
 ######### Graph for Best Random Forest Parameters ############
-# rf_accuracies_quest <- read_csv('data/rf_grid_search.csv') %>% 
-#   filter(!error == 0) %>% 
-#   arrange(error) %>% 
-#   head(10) 
-# 
-# kable(rf_accuracies_quest)
-```
+rf_accuracies <- read_csv('data_lessVariables/rf_grid_search1.csv') %>% 
+  filter(!accuracy == 0) %>% 
+  mutate(accuracy = round(accuracy, 3)) %>% 
+  arrange(desc(accuracy)) %>% 
+  head(5) 
 
-```{r, message=FALSE, echo=FALSE, warning=FALSE}
-######### Random Forest ####################
+rf_accuracy <- rf_accuracies$accuracy[1]
 
+kable(rf_accuracies, format = 'html') %>% 
+  kable_styling(full_width = F, position = "left")
 ```
 
 <br>
 
 ### Accuracy Recap
 
+None of the models performed well enough to be used as the sole criteria in making a decision as whether to lend money. Only an above 90% could prove convincing. Given the size of the number of observations and, though unexpected, small amount of variables, it was difficult prior to modeling which classification model would perform best. 
+
 ```{r, message=FALSE, echo=FALSE, warning=FALSE}
-accuracies <- tibble(model = c('Logistic Regression', 'Ridge Regression', 'Lasso', 'KNN', 'Boosted Tree')
-                     ,accuracy = as.double(c(linear_accuracy, ridge_reg_accuracy, lasso_accuracy, knn_accuracy, boosted_accuracy))) 
+accuracies <- tibble(model = c('Logistic Regression', 'Ridge Regression', 'Lasso', 'KNN', 'Boosted Trees', 'Random Forest')
+                     ,accuracy = as.double(c(linear_accuracy, ridge_reg_accuracy, lasso_accuracy
+                                             ,knn_accuracy, boosted_accuracy, rf_accuracy))) 
 
-accuracies <- accuracies %>% mutate(accuracy = round(accuracy, 3))
+accuracies <- accuracies %>% arrange(desc(accuracy)) %>% mutate(accuracy = round(accuracy, 3))
 
-kable(accuracies, align = c(rep('c', 5)), format = 'html') %>%
+kable(accuracies, align = c(rep('c', 6)), format = 'html') %>%
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, position = "left") 
 ```
+
+<br>
+
+### Future Work
+
+* The number one priority should be to link more variables with the current data. Data about borrowers is available, however I have yet to find a way to combine it with loan data.
+
+* An SVM and neural networks can be attempted with or without more data. A neural network has not been yet due to issues with the Keras/TensorFlow libraries and Northwestern's Quest computing clusters.
+
+* Cross-validation can be incorporated into Logistic Regression.
